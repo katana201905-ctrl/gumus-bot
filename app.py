@@ -98,15 +98,30 @@ def analyze_candles(df):
             return "🟥 Kırmızı Mum (Satıcılar Kontrolde)"
 
 def get_support_resistance(df):
-    # Son 5 günlük genel tabloya bakarak pivot hesaplıyoruz
-    period_high = df['Gram_High'].max()
-    period_low = df['Gram_Low'].min()
     current_close = df.iloc[-1]['Gram_Close']
     
-    pivot = (period_high + period_low + current_close) / 3
-    r1 = (pivot * 2) - period_low # 1. Direnç
-    s1 = (pivot * 2) - period_high # 1. Destek
-    return r1, s1
+    # 5 Günlük (Haftalık / Macro) Destek-Direnç
+    macro_high = df['Gram_High'].max()
+    macro_low = df['Gram_Low'].min()
+    
+    macro_pivot = (macro_high + macro_low + current_close) / 3
+    macro_r1 = (macro_pivot * 2) - macro_low
+    macro_s1 = (macro_pivot * 2) - macro_high
+    
+    # 24 Saatlik (Gün İçi Kısa Vade) Destek-Direnç
+    if len(df) >= 96:
+        df_24h = df.iloc[-96:]
+    else:
+        df_24h = df
+        
+    micro_high = df_24h['Gram_High'].max()
+    micro_low = df_24h['Gram_Low'].min()
+    
+    micro_pivot = (micro_high + micro_low + current_close) / 3
+    micro_r1 = (micro_pivot * 2) - micro_low
+    micro_s1 = (micro_pivot * 2) - micro_high
+    
+    return macro_r1, macro_s1, micro_r1, micro_s1
 
 def analyze_and_report():
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Piyasalar analiz ediliyor...")
@@ -130,7 +145,7 @@ def analyze_and_report():
     ema_21 = last_row.get('EMA_21', 0)
 
     candle_msg = analyze_candles(df)
-    r1, s1 = get_support_resistance(df)
+    macro_r1, macro_s1, micro_r1, micro_s1 = get_support_resistance(df)
 
     trend_msg = "Yatay Seyir ➡️"
     action_msg = "Beklemede Kal ⏳"
@@ -167,8 +182,13 @@ def analyze_and_report():
 🕯️ <b>Mum Analizi:</b> {candle_msg}
 
 🛡️ <b>Destek & Direnç Seviyeleri:</b>
-🔺 Direnç (Hedef): {r1:.2f} TL <i>(Kırılırsa uçuşa geçer)</i>
-🔻 Destek (Kalkan): {s1:.2f} TL <i>(Düşerse buradan seker)</i>
+<i>(Günlük Vur-Kaç / Kısa Vade)</i>
+🔸 Direnç: {micro_r1:.2f} TL
+🔸 Destek: {micro_s1:.2f} TL
+
+<i>(Haftalık / Orta Vade)</i>
+🔺 Direnç: {macro_r1:.2f} TL
+🔻 Destek: {macro_s1:.2f} TL
 
 ⚠️ <b>RSI Değeri:</b> {rsi_value:.1f} ({rsi_yorum})
 💡 <b>Botun Yorumu:</b> <b>{action_msg}</b>
