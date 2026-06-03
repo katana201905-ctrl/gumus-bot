@@ -77,34 +77,36 @@ def analyze_candles(df):
     total_range = last_candle['Gram_High'] - last_candle['Gram_Low']
     if total_range == 0: total_range = 0.0001
     
-    # 1. Doji (Kararsızlık)
     if body < (total_range * 0.1):
-        return "⚖️ DOJI MUMU (Piyasa Kararsız, Yön Değişebilir!)"
-        
-    # 2. Çekiç (Hammer) - Düşüş sonrası yükseliş sinyali
+        return "⚖️ DOJI MUMU (Kararsız piyasa yön arıyor)"
     elif lower_shadow > (body * 2) and upper_shadow < (body * 0.5):
-        return "🔨 ÇEKİÇ MUMU (Güçlü Alış Baskısı, Yükseliş Gelebilir!)"
-        
-    # 3. Yutan Boğa (Bullish Engulfing) - Yükseliş Sinyali
+        return "🔨 ÇEKİÇ MUMU (Alıcılar baskın, yükseliş sinyali)"
     elif prev_candle['Gram_Close'] < prev_candle['Gram_Open'] and \
          last_candle['Gram_Close'] > last_candle['Gram_Open'] and \
          last_candle['Gram_Close'] > prev_candle['Gram_Open'] and \
          last_candle['Gram_Open'] < prev_candle['Gram_Close']:
-        return "📈 YUTAN BOĞA MUMU (Çok Güçlü Yükseliş Sinyali!)"
-        
-    # 4. Yutan Ayı (Bearish Engulfing) - Düşüş Sinyali
+        return "📈 YUTAN BOĞA MUMU (Güçlü Yükseliş Sinyali!)"
     elif prev_candle['Gram_Close'] > prev_candle['Gram_Open'] and \
          last_candle['Gram_Close'] < last_candle['Gram_Open'] and \
          last_candle['Gram_Close'] < prev_candle['Gram_Open'] and \
          last_candle['Gram_Open'] > prev_candle['Gram_Close']:
-        return "📉 YUTAN AYI MUMU (Çok Güçlü Düşüş Sinyali!)"
-        
+        return "📉 YUTAN AYI MUMU (Güçlü Düşüş Sinyali!)"
     else:
-        # Standart Mum Rengi
         if last_candle['Gram_Close'] > last_candle['Gram_Open']:
             return "🟩 Yeşil Mum (Alıcılar Kontrolde)"
         else:
             return "🟥 Kırmızı Mum (Satıcılar Kontrolde)"
+
+def get_support_resistance(df):
+    # Son 5 günlük genel tabloya bakarak pivot hesaplıyoruz
+    period_high = df['Gram_High'].max()
+    period_low = df['Gram_Low'].min()
+    current_close = df.iloc[-1]['Gram_Close']
+    
+    pivot = (period_high + period_low + current_close) / 3
+    r1 = (pivot * 2) - period_low # 1. Direnç
+    s1 = (pivot * 2) - period_high # 1. Destek
+    return r1, s1
 
 def analyze_and_report():
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Piyasalar analiz ediliyor...")
@@ -112,13 +114,10 @@ def analyze_and_report():
     if df is None:
         return
 
-    # İndikatörleri Hesapla
     df['RSI'] = RSIIndicator(close=df['Gram_Close'], window=14).rsi()
-    
     macd_indicator = MACD(close=df['Gram_Close'], window_fast=12, window_slow=26, window_sign=9)
     df['MACD_12_26_9'] = macd_indicator.macd()
     df['MACDs_12_26_9'] = macd_indicator.macd_signal()
-    
     df['EMA_9'] = EMAIndicator(close=df['Gram_Close'], window=9).ema_indicator()
     df['EMA_21'] = EMAIndicator(close=df['Gram_Close'], window=21).ema_indicator()
 
@@ -130,8 +129,8 @@ def analyze_and_report():
     ema_9 = last_row.get('EMA_9', 0)
     ema_21 = last_row.get('EMA_21', 0)
 
-    # Mum Analizini Çalıştır
     candle_msg = analyze_candles(df)
+    r1, s1 = get_support_resistance(df)
 
     trend_msg = "Yatay Seyir ➡️"
     action_msg = "Beklemede Kal ⏳"
@@ -142,21 +141,21 @@ def analyze_and_report():
             if pd.notna(rsi_value) and rsi_value < 70:
                 action_msg = "ALIM FIRSATI OLABİLİR 🟢"
             else:
-                action_msg = "DİKKAT: Şişkinlik var, tepeden alma! ⚠️"
+                action_msg = "DİKKAT: Şişkinlik var, dirençten dönebilir! ⚠️"
                 
         elif ema_9 < ema_21 and macd_line < macd_signal:
             trend_msg = "Düşüş İvmesi Var 📉 (Aşağı Yönlü)"
             if pd.notna(rsi_value) and rsi_value > 30:
                 action_msg = "DÜŞÜŞ DEVAM EDİYOR, UZAK DUR 🔴"
             else:
-                action_msg = "DİP SEVİYELER - TEPKİ ALIMI GELEBİLİR 🟡"
+                action_msg = "DİP SEVİYELER - DESTEKTEN SEKME BEKLENEBİLİR 🟡"
 
     rsi_yorum = "Normal seviye"
     if pd.notna(rsi_value):
         if rsi_value >= 70:
-            rsi_yorum = "Aşırı Alım Bölgesinde (Düşüş gelebilir!) 🔴"
+            rsi_yorum = "Aşırı Alım Bölgesinde 🔴"
         elif rsi_value <= 30:
-            rsi_yorum = "Aşırı Satım Bölgesinde (Yükseliş başlayabilir!) 🟢"
+            rsi_yorum = "Aşırı Satım Bölgesinde 🟢"
     else:
         rsi_value = 0
 
@@ -166,10 +165,13 @@ def analyze_and_report():
 💰 <b>Anlık Fiyat:</b> {current_price:.2f} TL (Gram)
 📉 <b>Trend Durumu:</b> {trend_msg}
 🕯️ <b>Mum Analizi:</b> {candle_msg}
+
+🛡️ <b>Destek & Direnç Seviyeleri:</b>
+🔺 Direnç (Hedef): {r1:.2f} TL <i>(Kırılırsa uçuşa geçer)</i>
+🔻 Destek (Kalkan): {s1:.2f} TL <i>(Düşerse buradan seker)</i>
+
 ⚠️ <b>RSI Değeri:</b> {rsi_value:.1f} ({rsi_yorum})
 💡 <b>Botun Yorumu:</b> <b>{action_msg}</b>
-
-<i>Not: Banka makas aralığını mutlaka göz önünde bulundurunuz.</i>
 """
     send_telegram_message(message)
 
