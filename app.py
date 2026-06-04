@@ -5,7 +5,7 @@ import pandas as pd
 import requests
 import time
 import schedule
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from ta.momentum import RSIIndicator
 from ta.trend import MACD, EMAIndicator
 from flask import Flask
@@ -109,6 +109,7 @@ def get_support_resistance(df):
     macro_s1 = (macro_pivot * 2) - macro_high
     
     # 24 Saatlik (Gün İçi Kısa Vade) Destek-Direnç
+    # 15 dakikalık veride 24 saat = 24 * 4 = 96 mum yapar
     if len(df) >= 96:
         df_24h = df.iloc[-96:]
     else:
@@ -124,7 +125,18 @@ def get_support_resistance(df):
     return macro_r1, macro_s1, micro_r1, micro_s1
 
 def analyze_and_report():
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] Piyasalar analiz ediliyor...")
+    tr_tz = timezone(timedelta(hours=3))
+    now = datetime.now(tr_tz)
+    
+    # Hafta sonu ise (5: Cumartesi, 6: Pazar) çalıştırma
+    if now.weekday() >= 5:
+        return
+        
+    # Saat 10:00 ile 17:00 arasında değilse çalıştırma
+    if not (10 <= now.hour < 17):
+        return
+
+    print(f"[{now.strftime('%H:%M:%S')}] Piyasalar analiz ediliyor...")
     df = get_silver_data()
     if df is None:
         return
